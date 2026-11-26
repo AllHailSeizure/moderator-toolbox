@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, vi } from 'vitest';
-import { reddit, redis } from '@devvit/web/server';
-import type { T1, T3 } from '@devvit/web/shared';
+import { describe, expect } from 'vitest';
+import { redis } from '@devvit/web/server';
 import { createApp } from './app';
 import { createModTest, type FakeRedditWorld } from './test-harness';
 
@@ -34,38 +33,7 @@ const devvit = JSON.parse(
   readFileSync(new URL('../../devvit.json', import.meta.url), 'utf8')
 ) as Devvit;
 
-/** Nothing in these tests may reach the network (Reddit, Supabase, Gemini, Wikipedia). */
-function blockFetch() {
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-    throw new Error(`unexpected fetch ${String(input)}`);
-  });
-}
-
-type FakeComment = { id: T1; parentId: T1 | T3; authorName: string; locked: boolean };
-
-function installComments(world: FakeRedditWorld, comments: FakeComment[]) {
-  const ignored: string[] = [];
-  const locked: string[] = [];
-  vi.spyOn(reddit, 'getCommentById').mockImplementation((async (id: T1) => {
-    const c = comments.find((x) => x.id === id);
-    if (!c) throw new Error(`no comment ${id}`);
-    return {
-      ...c,
-      ignoreReports: async () => {
-        ignored.push(id);
-      },
-      lock: async () => {
-        c.locked = true;
-        locked.push(id);
-      },
-      reply: (opts: { text: string }) => reddit.submitComment({ id, text: opts.text }),
-    };
-  }) as unknown as typeof reddit.getCommentById);
-  void world;
-  return { ignored, locked };
-}
-
-const commentReport = (id: T1) => ({ type: 'CommentReport', comment: { id }, reason: 'spam' });
+// Every test also fails on any outbound fetch: the harness's FakeHttp has no stubs here.
 
 describe('report-moderator (STATIC_BOT_AUTHORS)', () => {
   for (const author of [
@@ -76,192 +44,172 @@ describe('report-moderator (STATIC_BOT_AUTHORS)', () => {
     'test-app',
   ]) {
     test(`ignores reports on comments by ${author}`, async ({ world, runner }) => {
-      blockFetch();
-      const { ignored } = installComments(world, [
-        { id: 't1_bot', parentId: 't3_p', authorName: author, locked: false },
-      ]);
-      await runner.trigger('comment-report', commentReport('t1_bot'));
-      expect(ignored).toEqual(['t1_bot']);
+      const post = world.seedPost({ id: 't3_p', title: 'p' });
+      const c = world.seedComment({ id: 't1_bot', parentId: post.id, body: 'beep', author });
+      await runner.report(c.id, 'spam');
+      expect(world.describeActions()).toEqual(['test-app ignoreReports t1_bot']);
       expect(await redis.get('bot:rf:comment:t1_bot')).toBe('1');
     });
   }
 
   test('leaves reports on human comments alone', async ({ world, runner }) => {
-    blockFetch();
-    const { ignored } = installComments(world, [
-      { id: 't1_h', parentId: 't3_p', authorName: 'alice', locked: false },
-    ]);
-    await runner.trigger('comment-report', commentReport('t1_h'));
-    expect(ignored).toEqual([]);
+    const post = world.seedPost({ id: 't3_p', title: 'p' });
+    world.seedComment({ id: 't1_h', parentId: post.id, body: 'hi', author: 'alice' });
+    await runner.report('t1_h', 'spam');
+    expect(world.actions).toEqual([]);
     expect(await redis.get('bot:rf:comment:t1_h')).toBeUndefined();
   });
 
   test('dedupes a repeated report trigger', async ({ world, runner }) => {
-    blockFetch();
-    const { ignored } = installComments(world, [
-      { id: 't1_bot', parentId: 't3_p', authorName: 'define-bot', locked: false },
-    ]);
-    await runner.trigger('comment-report', commentReport('t1_bot'));
-    await runner.trigger('comment-report', commentReport('t1_bot'));
-    expect(ignored).toEqual(['t1_bot']);
+    const post = world.seedPost({ id: 't3_p', title: 'p' });
+    world.seedComment({ id: 't1_bot', parentId: post.id, body: 'x', author: 'define-bot' });
+    await runner.report('t1_bot', 'spam');
+    await runner.report('t1_bot', 'rude');
+    expect(world.actionsOf('ignoreReports')).toHaveLength(1);
   });
 
-  test('ignores reports on posts by the split-out apps', async ({ runner }) => {
-    blockFetch();
-    const ignored: string[] = [];
-    vi.spyOn(reddit, 'getPostById').mockImplementation((async (id: T3) => ({
-      id,
-      authorName: 'predatory-journal-watch',
-      ignoreReports: async () => {
-        ignored.push(id);
-      },
-    })) as unknown as typeof reddit.getPostById);
-    await runner.trigger('post-report', { type: 'PostReport', post: { id: 't3_p' }, reason: 'x' });
-    expect(ignored).toEqual(['t3_p']);
+  test('ignores reports on posts by the split-out apps', async ({ world, runner }) => {
+    world.seedPost({ id: 't3_p', title: 'warning', author: 'predatory-journal-watch' });
+    await runner.report('t3_p', 'x');
+    expect(world.post('t3_p')?.ignoringReports).toBe(true);
     expect(await redis.get('bot:rf:post:t3_p')).toBe('1');
   });
 });
 
 describe('depth-cap-moderator', () => {
-  const chain = (): FakeComment[] => [
-    { id: 't1_c1', parentId: 't3_p', authorName: 'a', locked: false },
-    { id: 't1_c2', parentId: 't1_c1', authorName: 'b', locked: false },
-    { id: 't1_c3', parentId: 't1_c2', authorName: 'a', locked: false },
-  ];
-  const created = (id: T1, parentId: T1 | T3) => ({
-    type: 'CommentCreate',
-    comment: { id, parentId, postId: 't3_p', author: 't2_a', body: 'reply' },
-    post: { id: 't3_p' },
-    subreddit: { name: 'testsub' },
-  });
+  /** t3_p <- c1 (a) <- c2 (b); returns c2's id. */
+  const chain = (world: FakeRedditWorld) => {
+    world.seedPost({ id: 't3_p', title: 'p', author: 'op' });
+    world.seedComment({ id: 't1_c1', parentId: 't3_p', body: '1', author: 'a' });
+    return world.seedComment({ id: 't1_c2', parentId: 't1_c1', body: '2', author: 'b' }).id;
+  };
 
   test('replies, locks and reports the comment that reaches the cap', async ({
     world,
     runner,
-    mocks,
+    configure,
   }) => {
-    blockFetch();
-    mocks.settings.update({ depthCapModEnabled: true, depthCap: 3 });
-    const comments = chain();
-    const { locked } = installComments(world, comments);
-    const report = vi.spyOn(reddit, 'report').mockResolvedValue(undefined as never);
+    configure({ depthCapModEnabled: true, depthCap: 3 });
+    const c3 = await runner.userComments('a', chain(world), 'reply');
 
-    await runner.trigger('comment-create', created('t1_c3', 't1_c2'));
-
-    const replies = world.commentsOn('t1_c3');
+    const replies = world.commentsOn(c3.id);
     expect(replies).toHaveLength(1);
     expect(replies[0]?.body).toContain('maximum comment depth');
     expect(replies[0]?.body).toContain('^I ^am ^a ^bot.');
-    expect(replies[0]?.locked).toBe(true);
-    expect(replies[0]?.distinguished).toBe(true);
-    expect(locked).toEqual(['t1_c3']);
-    expect(report).toHaveBeenCalledTimes(1);
-    expect(await redis.get('bot:dcmod:handled:t1_c3')).toBe('1');
+    expect(replies[0]).toMatchObject({ locked: true, distinguished: true });
+    expect(world.comment(c3.id)?.locked).toBe(true);
+    expect(world.actionsOf('report').map((a) => a.target)).toEqual([c3.id]);
+    expect(await redis.get(`bot:dcmod:handled:${c3.id}`)).toBe('1');
     expect(await redis.zCard('bot:chainmod:depth-log')).toBe(1);
   });
 
-  test('does nothing below the cap', async ({ world, runner, mocks }) => {
-    blockFetch();
-    mocks.settings.update({ depthCapModEnabled: true, depthCap: 3 });
-    const { locked } = installComments(world, chain());
-    await runner.trigger('comment-create', created('t1_c2', 't1_c1'));
-    expect(world.comments).toHaveLength(0);
-    expect(locked).toEqual([]);
+  test('does nothing below the cap', async ({ world, runner, configure }) => {
+    configure({ depthCapModEnabled: true, depthCap: 3 });
+    chain(world);
+    await runner.userComments('a', 't3_p', 'top-level');
+    expect(world.actions).toEqual([]);
+  });
+
+  test('skips moderators when depthCapIgnoreModerators is on', async ({
+    world,
+    runner,
+    configure,
+  }) => {
+    configure({ depthCapModEnabled: true, depthCap: 3, depthCapIgnoreModerators: true });
+    const parent = chain(world);
+    world.mod('modsy');
+    await runner.userComments('modsy', parent, 'mod reply');
+    expect(world.actions).toEqual([]);
   });
 
   test('does nothing when disabled', async ({ world, runner }) => {
-    blockFetch();
-    const { locked } = installComments(world, chain());
-    await runner.trigger('comment-create', created('t1_c3', 't1_c2'));
-    expect(world.comments).toHaveLength(0);
-    expect(locked).toEqual([]);
-    expect(await redis.get('bot:dcmod:handled:t1_c3')).toBeUndefined();
+    const c3 = await runner.userComments('a', chain(world), 'reply');
+    expect(world.actions).toEqual([]);
+    expect(await redis.get(`bot:dcmod:handled:${c3.id}`)).toBeUndefined();
   });
 });
 
 describe('length-moderator', () => {
-  function installPost(world: FakeRedditWorld, flairId: string) {
-    const lock = vi.fn(async () => {});
-    vi.spyOn(reddit, 'getPostById').mockImplementation((async (id: T3) => ({
-      id,
-      flair: { templateId: flairId },
-      lock,
-      addComment: (opts: { text: string }) => reddit.submitComment({ id, text: opts.text }),
-    })) as unknown as typeof reddit.getPostById);
-    world.seedPost({ id: 't3_long', title: 'Long' });
-    return lock;
-  }
-  const submit = (selftext: string, url = '') => ({
-    type: 'PostSubmit',
-    post: { id: 't3_long', title: 'Long', selftext, url },
-    author: { id: 't2_a', name: 'alice' },
-  });
+  const restricted = { templateId: 'flair-1', text: 'Theory' };
 
   test('removes, locks and explains an over-long post with the restricted flair', async ({
     world,
     runner,
-    mocks,
+    configure,
   }) => {
-    blockFetch();
-    mocks.settings.update({
+    configure({
       lengthModEnabled: true,
       lengthModFlairId: 'flair-1',
       lengthModMaxUnhostedLength: 10,
       lengthModMaxUnhostedComment: 'Too long, host it elsewhere.',
     });
-    const lock = installPost(world, 'flair-1');
-    await runner.trigger('post-submit', submit('x'.repeat(50)));
-    expect(world.isRemoved('t3_long')).toBe(true);
-    expect(lock).toHaveBeenCalled();
-    const replies = world.commentsOn('t3_long');
+    const post = await runner.userPosts('alice', {
+      title: 'Long',
+      selftext: 'x'.repeat(50),
+      flair: restricted,
+    });
+    expect(world.isRemoved(post.id)).toBe(true);
+    expect(world.post(post.id)?.locked).toBe(true);
+    const replies = world.commentsOn(post.id);
     expect(replies).toHaveLength(1);
     expect(replies[0]?.body).toBe('Too long, host it elsewhere.\n\n---\n\n^I ^am ^a ^bot.');
-    expect(replies[0]?.stickied).toBe(true);
+    expect(replies[0]).toMatchObject({ stickied: true, locked: true });
   });
 
-  test('leaves a short post alone', async ({ world, runner, mocks }) => {
-    blockFetch();
-    mocks.settings.update({
+  test('leaves a short post alone', async ({ world, runner, configure }) => {
+    configure({
       lengthModEnabled: true,
       lengthModFlairId: 'flair-1',
       lengthModMaxUnhostedLength: 100,
     });
-    installPost(world, 'flair-1');
-    await runner.trigger('post-submit', submit('short'));
-    expect(world.isRemoved('t3_long')).toBe(false);
-    expect(world.comments).toHaveLength(0);
+    const post = await runner.userPosts('alice', {
+      title: 'Short',
+      selftext: 'short',
+      flair: restricted,
+    });
+    expect(world.isRemoved(post.id)).toBe(false);
+    expect(world.actions).toEqual([]);
+  });
+
+  test('enforces when the restricted flair is applied later', async ({
+    world,
+    runner,
+    configure,
+  }) => {
+    configure({
+      lengthModEnabled: true,
+      lengthModFlairId: 'flair-1',
+      lengthModMaxUnhostedLength: 10,
+    });
+    const post = await runner.userPosts('alice', { title: 'Long', selftext: 'y'.repeat(40) });
+    expect(world.isRemoved(post.id)).toBe(false);
+
+    await runner.flairPost(post.id, restricted);
+    expect(world.isRemoved(post.id)).toBe(true);
+    expect(world.post(post.id)?.locked).toBe(true);
   });
 });
 
 describe('extracted modules are gone', () => {
-  test('a !define comment gets no reply and makes no network call', async ({ world, runner }) => {
-    const fetchSpy = blockFetch();
-    installComments(world, []);
-    await runner.trigger('comment-create', {
-      type: 'CommentCreate',
-      comment: {
-        id: 't1_d',
-        parentId: 't3_p',
-        postId: 't3_p',
-        author: 't2_a',
-        body: 'u/moderator-toolbox !define entropy',
-      },
-      post: { id: 't3_p' },
-      author: { name: 'alice' },
-    });
-    expect(world.comments).toHaveLength(0);
-    expect(fetchSpy).not.toHaveBeenCalled();
+  test('a !define comment gets no reply and makes no network call', async ({
+    world,
+    runner,
+    http,
+  }) => {
+    world.seedPost({ id: 't3_p', title: 'p' });
+    await runner.userComments('alice', 't3_p', 'u/moderator-toolbox !define entropy');
+    expect(world.actions).toEqual([]);
+    expect(http.calls).toEqual([]);
   });
 
-  test('a post with a DOI gets no predatory-journal reply', async ({ world, runner }) => {
-    const fetchSpy = blockFetch();
-    await runner.trigger('post-submit', {
-      type: 'PostSubmit',
-      post: { id: 't3_doi', title: 'Paper', selftext: 'https://doi.org/10.1234/abc', url: '' },
-      author: { id: 't2_a', name: 'alice' },
+  test('a post with a DOI gets no predatory-journal reply', async ({ world, runner, http }) => {
+    await runner.userPosts('alice', {
+      title: 'Paper',
+      selftext: 'https://doi.org/10.1234/abc',
+      url: '',
     });
-    expect(world.comments).toHaveLength(0);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(world.actions).toEqual([]);
+    expect(http.calls).toEqual([]);
   });
 });
 
@@ -279,7 +227,6 @@ describe('devvit.json', () => {
   });
 
   test('every declared endpoint is served by the app', async () => {
-    blockFetch();
     const app = createApp();
     const endpoints = [
       ...Object.values(devvit.triggers),
