@@ -1,0 +1,193 @@
+# Moderator Toolbox — Moderator Onboarding Guide
+
+Welcome to the moderation team! This guide explains everything the bot can do and how to use it. No technical knowledge required.
+
+---
+
+## What is the bot?
+
+`u/moderator-toolbox` is a helper that runs automatically in the background and also gives you tools in the Reddit menu. It handles routine moderation tasks so you don't have to.
+
+There are two ways to interact with it:
+1. **Automatic rules** — the bot watches posts and comments and takes action on its own
+2. **Menu tools** — tools you trigger yourself from the three-dot (⋯) menu on posts, comments, or the subreddit
+
+Predatory-journal warnings and the `!define` command are now separate apps (**Predatory Journal Watch**, `u/predatory-journal-watch`, and **Define Bot**, `u/define-bot`). The Adversarial Reviewer is its own app too. Their settings live on their own install pages.
+
+---
+
+## Automatic Rules
+
+### Responding to Commenters (Nonresponder Check)
+
+When someone posts, the bot checks their latest 2 qualifying previous posts here. Each needs 3 comments from other known users, excluding OP, the app account, and removed/deleted/spam comments. Only surviving OP replies to another eligible user count as engagement; top-level comments and replies to self/app accounts do not. A since-removed parent counts if its author is known; unknown/deleted parent authors do not. Without engagement on either post, the bot leaves a stickied, distinguished, locked reminder. The post stays open and warnings have no repeat limit.
+
+If every checked qualifying post was already warned, the new post is also reported to mods as “Nonresponder: repeated warnings ignored”. Warning IDs are tracked for 180 days; older warnings can be recognized by distinguished app comments starting with the current warning text. Editing the warning text can prevent this fallback. Report failures are logged.
+
+Moderators are exempt by default (`nonresponderRunOnMods=false`); approved users are checked by default (`nonresponderRunOnApprovedUsers=true`). For a moderator who is also approved, the moderator setting wins. Always skip missing/deleted posters and the app's own account; it is also excluded from other-user counts, reply parents, and used for warning detection. Other bots/apps are checked like anyone else, with exemptions only through moderator/approved status; there is no username list.
+
+With `nonresponderSkipLockedComments=true` (default), locked comments (including AutoModerator, mod notices, or bots/apps) do not count toward the minimum, and OP replies to locked parents do not count as responses. Unlocked moderator comments count normally. A lock on OP's own reply does not matter: it counts if the reply survives and its parent is eligible. Turning this off lets locked comments and replies to them count, except app authors remain excluded.
+
+The check scans the author's 50 most recent posts and at most 10 candidate trees (500 comments/50 listings each). Insufficient history or incomplete scans mean no warning. Installation defaults: `nonresponderModEnabled=true`, `nonresponderPostsToCheck=2`, `nonresponderMinComments=3`, `nonresponderReportRepeat=true`, plus the settings above and `nonresponderResponse` (rule reminder). Blank warning text suppresses posting and reporting.
+
+---
+
+### Posting Quota (Flood Moderator)
+
+The bot limits how often a user can post. By default, a user can post once every 24 hours. If someone posts more than that, their extra post is automatically removed.
+
+**What you'll see:** Removed posts with a bot comment explaining why.
+
+**Exemptions:** By default, moderators and approved submitters are not subject to the quota. Bot-removed posts, mod-removed posts, and deleted posts don't count against the quota either — so there's no penalty for submitting something that gets removed.
+
+**You don't need to do anything** for this to work. But if you want to look up a specific user's quota status, see "Flood Quota Checker" below.
+
+---
+
+### Comment Depth Cap (Depth Cap Moderator)
+
+When a comment thread gets too deep (more than 10 replies deep by default), the bot locks it and replies with a notice explaining that the thread has reached its limit.
+
+**What you'll see:** A distinguished bot comment at the bottom of deep threads, with the deepest comment locked.
+
+**Why it exists:** Very long reply chains are hard to follow and often go off-topic. This keeps discussions manageable.
+
+---
+
+### OP Self-Replies (Self-Response Moderator)
+
+If the original poster (OP) replies directly to their own post at the top level, the bot removes and locks that reply.
+
+**Why it exists:** On r/LLMPhysics, posts are meant to be critiqued by others. OP jumping in to defend their post as a top-level comment tends to derail the discussion before it starts.
+
+**Top-level only:** The bot only catches direct replies to the post. If OP replies within a thread (replying to someone else's comment), that's fine.
+
+---
+
+### Post Length Limits (Length Moderator)
+
+The bot can enforce minimum and maximum post lengths. This is currently configured for two rules:
+
+1. Posts with a specific flair that are too long get removed
+2. Link posts (posts with a URL) that don't have enough explanation text get removed
+
+**What you'll see:** Removed posts with a bot comment explaining the length issue.
+
+---
+
+### Ignoring Bot Reports (Report Moderator)
+
+The bot silently dismisses reports on content posted by known bot accounts (`AutoModerator`, `FloodAssistant`, etc.). This keeps the mod report queue clean — you won't see bot moderation notices flagged as reports.
+
+---
+
+## Menu Tools
+
+These tools are available from the three-dot (⋯) menu. You'll see them on posts, comments, or the subreddit menu depending on which tool it is.
+
+---
+
+### Chain Mop
+
+**Where:** Three-dot menu on any comment
+
+Removes and/or locks an entire comment chain starting from the comment you picked. It goes all the way down — every reply, and every reply to those replies.
+
+**How to use:**
+1. Find the top comment of the thread you want to clean up
+2. Click the three-dot menu on that comment
+3. Click "Chain Mop"
+4. A form will appear — check the boxes for what you want to do:
+   - **Remove comments** — removes them (users can see they were removed)
+   - **Lock comments** — prevents any further replies
+   - **Skip distinguished** — leaves moderator-distinguished comments alone
+5. Click confirm
+
+**After:** A note is added to the top comment recording your name and how many comments were removed.
+
+**Use it when:** A thread has gone completely off the rails and you want to clean it all up at once instead of removing comments one by one.
+
+---
+
+### Saved Responses
+
+**Where:** Three-dot menu on posts and comments (for applying a response); subreddit menu (for managing your library)
+
+A library of pre-written moderation messages. Instead of retyping the same explanation every time you remove something, you save it once and apply it with a few clicks.
+
+**Applying a saved response:**
+1. Open the three-dot menu on the post or comment
+2. Click "Apply Saved Response"
+3. Select the response you want from the list
+4. Edit the message if needed for this specific situation
+5. Choose options:
+   - **Post as:** "Bot" (the message comes from `u/LLMPhysics-bot`) or "Moderator" (the message comes from you)
+   - **Distinguish:** Makes the comment appear as a mod comment (only available when posting as Bot)
+   - **Lock target:** Locks the post or comment you're responding to
+6. Click confirm
+
+**Managing your library (add, edit, delete):**
+1. Open the subreddit menu (top of the subreddit page)
+2. Click "Saved Responses"
+3. Choose New, Edit, or Delete
+
+**Template shortcuts** you can use in your saved responses:
+
+| Type this | What it becomes |
+|-----------|----------------|
+| `{get_username}` | The username of the post/comment author |
+| `{get_post_flair}` | The post's flair text |
+| `{modmail}` | A link to the subreddit modmail |
+
+**Example saved response using shortcuts:**
+> "Hi {get_username}, your post has been removed because it doesn't meet the requirements for the {get_post_flair} flair. Please feel free to reach out via {modmail} if you have questions."
+
+---
+
+### Flood Quota Checker
+
+**Where:** Subreddit menu
+
+Lets you look up any user's current posting quota status.
+
+**How to use:**
+1. Open the subreddit menu
+2. Click "Flood Quota Checker"
+3. Type in a username
+4. The bot will show you:
+   - Their recent posts and whether each one counts toward the quota
+   - How many quota-eligible posts they have in the window
+   - When their quota resets and they can post again
+
+**Use it when:** A user asks why their post was removed, or you want to check if someone is close to their limit before approving their post.
+
+---
+
+## Common Questions
+
+**Q: A post was removed but I don't know why.**
+Check the mod log — the bot always logs its actions. You can also check if there's a bot comment on the removed post explaining the reason.
+
+**Q: The bot removed something it shouldn't have.**
+You can approve the post or comment manually. The bot won't re-remove something that a moderator has approved.
+
+**Q: A user is complaining their post was removed unfairly.**
+Use the Flood Quota Checker to see if the quota removal was justified. If you want to make an exception, approve the post — this also flags the user as "approved" for future quota evaluation.
+
+**Q: I want to change the removal message text, or turn a feature off.**
+Open the app's settings page for the subreddit (Mod Tools → Installed Apps → Moderator Toolbox → Settings). Each module has an "Enabled" toggle and its own message fields. A blank message field means the bot acts without posting a comment.
+
+---
+
+## Quick Reference
+
+| I want to... | Tool |
+|-------------|------|
+| Clean up a derailed comment thread | Chain Mop (comment menu) |
+| Post a pre-written mod message | Saved Responses (post/comment menu) |
+| Check how many posts a user has made | Flood Quota Checker (subreddit menu) |
+| Change quota limits, the depth cap, messages, or turn a module off | App settings page (Installed Apps → Moderator Toolbox) |
+
+---
+
+If you have questions not answered here, reach out to u/AllHailSeizure.

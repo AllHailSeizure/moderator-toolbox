@@ -4,7 +4,7 @@ title: Legal Documentation
 permalink: /
 ---
 
-# App Legal Documentation
+# Moderator Toolbox — Legal Documentation
 
 - [Terms of Service]({{ site.baseurl }}/terms/)
 - [Privacy Policy]({{ site.baseurl }}/privacy/)

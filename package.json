@@ -1,6 +1,6 @@
 {
-  "name": "devvit-app-template",
-  "version": "0.1.0",
+  "name": "moderator-toolbox",
+  "version": "0.0.4",
   "private": true,
   "license": "MIT",
   "scripts": {

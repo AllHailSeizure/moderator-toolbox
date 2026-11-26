@@ -1,6 +1,6 @@
 {
   "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
-  "name": "devvit-app-template",
+  "name": "moderator-toolbox",
   "marketingAssets": {
     "icon": "assets/icon.png"
   },
@@ -11,39 +11,342 @@
     "subreddit": "llmphysics_dev"
   },
   "permissions": {
+    "http": {
+      "domains": [
+        "eimdgqymjwfljtapnuyl.supabase.co"
+      ]
+    },
     "redis": true,
     "reddit": {
-      "enable": true
+      "enable": true,
+      "asUser": [
+        "SUBMIT_COMMENT"
+      ],
+      "scope": "moderator"
     }
   },
   "triggers": {
-    "onPostSubmit": "/internal/triggers/post-submit"
+    "onAppInstall": "/internal/triggers/app-install",
+    "onAppUpgrade": "/internal/triggers/app-upgrade",
+    "onPostSubmit": "/internal/triggers/post-submit",
+    "onPostFlairUpdate": "/internal/triggers/post-flair-update",
+    "onCommentCreate": "/internal/triggers/comment-create",
+    "onPostReport": "/internal/triggers/post-report",
+    "onCommentReport": "/internal/triggers/comment-report",
+    "onModAction": "/internal/triggers/mod-action",
+    "onPostDelete": "/internal/triggers/post-delete",
+    "onModMail": "/internal/triggers/mod-mail"
+  },
+  "scheduler": {
+    "tasks": {
+      "flair-transfer-retry": {
+        "endpoint": "/internal/scheduler/flair-transfer-retry",
+        "cron": "*/5 * * * *"
+      }
+    }
   },
   "menu": {
     "items": [
       {
-        "label": "Example Action",
-        "description": "Example moderator menu action.",
+        "label": "Chain Mop",
+        "description": "Remove and/or lock this comment chain",
         "forUserType": "moderator",
-        "location": "post",
-        "endpoint": "/internal/menu/example-action"
+        "location": "comment",
+        "endpoint": "/internal/menu/chain-mop"
+      },
+      {
+        "label": "Saved Responses",
+        "description": "Comment with with a canned response.",
+        "forUserType": "moderator",
+        "location": [
+          "comment",
+          "post"
+        ],
+        "endpoint": "/internal/menu/apply-saved-response",
+        "postFilter": "none"
+      },
+      {
+        "label": "Saved Responses",
+        "description": "Add, edit, or delete saved general responses",
+        "forUserType": "moderator",
+        "location": "subreddit",
+        "endpoint": "/internal/menu/saved-responses",
+        "postFilter": "none"
+      },
+      {
+        "label": "Flood Quota",
+        "description": "Check a user's flood quota status.",
+        "forUserType": "moderator",
+        "location": "subreddit",
+        "endpoint": "/internal/menu/quota-viewer"
       }
     ]
   },
+  "forms": {
+    "chain-mop": "/internal/forms/chain-mop",
+    "saved-response-manage": "/internal/forms/saved-response/manage",
+    "saved-response-select": "/internal/forms/saved-response/step2",
+    "saved-response-apply": "/internal/forms/saved-response/apply",
+    "saved-response-add": "/internal/forms/saved-response/add",
+    "saved-response-edit-select": "/internal/forms/saved-response/edit-select",
+    "saved-response-edit-apply": "/internal/forms/saved-response/edit-apply",
+    "saved-response-delete": "/internal/forms/saved-response/delete",
+    "quota-viewer-search": "/internal/forms/quota-viewer-search",
+    "quota-viewer-result": "/internal/forms/quota-viewer-result"
+  },
   "settings": {
-    "global": {},
-    "subreddit": {
-      "enabled": {
-        "type": "boolean",
-        "label": "Enable app",
-        "helpText": "Enable or disable automated actions.",
-        "defaultValue": true
+    "global": {
+      "supabaseUrl": {
+        "type": "string",
+        "label": "Supabase project URL",
+        "helpText": "https://YOUR_PROJECT.supabase.co — used for writing bot logs to the bot_logs table.",
+        "isSecret": false
       },
+      "supabaseServiceKey": {
+        "type": "string",
+        "label": "Supabase service key",
+        "helpText": "Service key for writing bot logs to the bot_logs table. Keep secret.",
+        "isSecret": true
+      }
+    },
+    "subreddit": {
       "botSignature": {
         "type": "paragraph",
-        "label": "Bot signature",
-        "helpText": "Appended to bot comments. Leave blank for no signature.",
-        "defaultValue": ""
+        "label": "General — Bot signature",
+        "helpText": "Appended to all bot comments. Leave blank for no signature.",
+        "defaultValue": "I am a bot. This action was performed automatically. Contact the moderators if you have questions."
+      },
+      "depthCap": {
+        "type": "number",
+        "label": "Depth Cap — Maximum comment depth",
+        "helpText": "Lock comment chains that reach this depth. Set to 0 to disable. Default: 10.",
+        "defaultValue": 10
+      },
+      "depthCapResponse": {
+        "type": "paragraph",
+        "label": "Depth Cap Moderation — Depth cap triggered comment",
+        "helpText": "Commented when a comment reaches theh maximum depth cap."
+      },
+      "depthCapReport": {
+        "type": "boolean",
+        "label": "Depth Cap — Submit report to mod queue",
+        "helpText": "Submit the triggered comment as a report when the depth cap fires. Disable to prevent mod queue clogging.",
+        "defaultValue": true
+      },
+      "floodAssistantResponse": {
+        "type": "paragraph",
+        "label": "Flood Assistant — Flood assistant triggered comment",
+        "helpText": "Commented when the flood assistant is triggered."
+      },
+      "floodAssistantMaxPosts": {
+        "type": "number",
+        "label": "Flood Assistant — Max posts",
+        "helpText": "Maximum number of posts allowed within the time window. Default: 1.",
+        "defaultValue": 1
+      },
+      "floodAssistantWindowHours": {
+        "type": "number",
+        "label": "Flood Assistant — Window (hours)",
+        "helpText": "Time window in hours. Default: 24.",
+        "defaultValue": 24
+      },
+      "floodAssistantIgnoreModerators": {
+        "type": "boolean",
+        "label": "Flood Assistant — Ignore moderators",
+        "helpText": "If enabled, posts by moderators will not be removed.",
+        "defaultValue": true
+      },
+      "floodAssistantIgnoreContributors": {
+        "type": "boolean",
+        "label": "Flood Assistant — Ignore contributors",
+        "helpText": "If enabled, posts by approved submitters will not be removed.",
+        "defaultValue": true
+      },
+      "floodAssistantIgnoreAutoRemoved": {
+        "type": "boolean",
+        "label": "Flood Assistant — Ignore auto-removed posts",
+        "helpText": "If enabled, posts that are immediately removed will not count towards the quota.",
+        "defaultValue": true
+      },
+      "floodAssistantIgnoreRemoved": {
+        "type": "boolean",
+        "label": "Flood Assistant — Ignore moderator-removed posts",
+        "helpText": "If enabled, posts removed by moderators will not count towards the quota.",
+        "defaultValue": true
+      },
+      "floodAssistantIgnoreDeleted": {
+        "type": "boolean",
+        "label": "Flood Assistant — Ignore deleted posts",
+        "helpText": "If enabled, posts deleted by the author will not count towards the quota.",
+        "defaultValue": true
+      },
+      "selfResponseResponse": {
+        "type": "paragraph",
+        "label": "Self-Response Moderator — Self-response triggered comment",
+        "helpText": "Commented when a user responds to their own post."
+      },
+      "selfResponseIgnoreModerators": {
+        "type": "boolean",
+        "label": "Self-Response Moderator — Ignore moderators",
+        "helpText": "If enabled, the self-response rule will not apply to moderators.",
+        "defaultValue": true
+      },
+      "selfResponseIgnoreContributors": {
+        "type": "boolean",
+        "label": "Self-Response Moderator — Ignore approved submitters",
+        "helpText": "If enabled, the self-response rule will not apply to approved submitters.",
+        "defaultValue": true
+      },
+      "depthCapModEnabled": {
+        "type": "boolean",
+        "label": "Depth Cap — Enable",
+        "helpText": "Enable or disable the depth cap module.",
+        "defaultValue": true
+      },
+      "depthCapIgnoreModerators": {
+        "type": "boolean",
+        "label": "Depth Cap — Ignore moderators",
+        "helpText": "Moderators are exempt from the depth cap.",
+        "defaultValue": true
+      },
+      "depthCapIgnoreContributors": {
+        "type": "boolean",
+        "label": "Depth Cap — Ignore approved submitters",
+        "helpText": "Approved submitters are exempt from the depth cap.",
+        "defaultValue": true
+      },
+      "floodModEnabled": {
+        "type": "boolean",
+        "label": "Flood Moderator — Enable",
+        "helpText": "Enable or disable the flood moderator.",
+        "defaultValue": true
+      },
+      "selfResponseModEnabled": {
+        "type": "boolean",
+        "label": "Self-Response Moderator — Enable",
+        "helpText": "Enable or disable the self-response moderator.",
+        "defaultValue": true
+      },
+      "lengthModEnabled": {
+        "type": "boolean",
+        "label": "Length Moderator — Enable",
+        "helpText": "Enable or disable the length moderator.",
+        "defaultValue": true
+      },
+      "lengthModFlairId": {
+        "type": "string",
+        "label": "Length Moderator — Restricted flair template ID",
+        "helpText": "Posts with this flair are subject to the maximum length limit. Leave blank to disable."
+      },
+      "lengthModMaxUnhostedLength": {
+        "type": "number",
+        "label": "Length Moderator — Max unhosted length (characters)",
+        "helpText": "Maximum character count for posts with the restricted flair. 0 = disabled.",
+        "defaultValue": 0
+      },
+      "lengthModMinHostedLength": {
+        "type": "number",
+        "label": "Length Moderator — Min hosted length (characters)",
+        "helpText": "Minimum character count for link posts. 0 = disabled.",
+        "defaultValue": 0
+      },
+      "lengthModMaxUnhostedComment": {
+        "type": "paragraph",
+        "label": "Length Moderator — Over-length removal message",
+        "helpText": "Posted when a post exceeds the maximum length for its flair."
+      },
+      "lengthModMinHostedComment": {
+        "type": "paragraph",
+        "label": "Length Moderator — Under-length removal message",
+        "helpText": "Posted when a link post is below the minimum length."
+      },
+      "flairTransferEnabled": {
+        "type": "boolean",
+        "label": "Flair Transfer — Enable",
+        "helpText": "Enable or disable the flair transfer module.",
+        "defaultValue": false
+      },
+      "flairTransferPostFlairTemplateId": {
+        "type": "string",
+        "label": "Flair Transfer — Source post flair template ID",
+        "helpText": "Post flair template ID that counts toward the transfer."
+      },
+      "flairTransferUserFlairTemplateId": {
+        "type": "string",
+        "label": "Flair Transfer — Target user flair template ID",
+        "helpText": "User flair template ID to award after the threshold is met."
+      },
+      "flairTransferRequiredPostCount": {
+        "type": "number",
+        "label": "Flair Transfer — Required qualifying posts",
+        "helpText": "Number of qualifying flaired posts required before awarding the user flair.",
+        "defaultValue": 1
+      },
+      "flairTransferOverwriteExistingUserFlair": {
+        "type": "boolean",
+        "label": "Flair Transfer — Overwrite existing user flair",
+        "helpText": "Allow the module to replace an existing user flair when awarding the configured flair.",
+        "defaultValue": false
+      },
+      "mopToolEnabled": {
+        "type": "boolean",
+        "label": "Chain Mop — Enable",
+        "helpText": "Enable or disable the Chain Mop action.",
+        "defaultValue": true
+      },
+      "responseToolEnabled": {
+        "type": "boolean",
+        "label": "Saved Responses — Enable",
+        "helpText": "Enable or disable the Saved Responses action.",
+        "defaultValue": true
+      },
+      "nonresponderModEnabled": {
+        "type": "boolean",
+        "label": "Nonresponder Check — Enable",
+        "helpText": "Enable or disable the nonresponder check (runs on post submit).",
+        "defaultValue": true
+      },
+      "nonresponderPostsToCheck": {
+        "type": "number",
+        "label": "Nonresponder Check — Previous posts to check",
+        "helpText": "Number of qualifying previous posts that must all lack an OP reply to another eligible user (1–10). Scans at most 10 candidate trees. Default: 2.",
+        "defaultValue": 2
+      },
+      "nonresponderMinComments": {
+        "type": "number",
+        "label": "Nonresponder Check — Minimum comments per post",
+        "helpText": "Minimum comments from other users, excluding OP, the app account, missing/deleted authors, removed/deleted/spam comments, and (by default) locked comments (1–100). Default: 3.",
+        "defaultValue": 3
+      },
+      "nonresponderSkipLockedComments": {
+        "type": "boolean",
+        "label": "Nonresponder Check — Skip locked comments",
+        "helpText": "Locked comments (e.g. AutoModerator, mod notices, bots/apps) do not count toward minimum other-user comments, and OP replies to locked comments do not count as responses. Unlocked mod comments count normally. A lock on OP’s own reply does not affect engagement.",
+        "defaultValue": true
+      },
+      "nonresponderRunOnMods": {
+        "type": "boolean",
+        "label": "Nonresponder Check — Run on moderators",
+        "helpText": "If off, moderator posts are not checked. For moderators, this setting takes precedence over Run on approved users.",
+        "defaultValue": false
+      },
+      "nonresponderRunOnApprovedUsers": {
+        "type": "boolean",
+        "label": "Nonresponder Check — Run on approved users",
+        "helpText": "If off, approved users’ posts are not checked, except moderators when Run on moderators is on.",
+        "defaultValue": true
+      },
+      "nonresponderReportRepeat": {
+        "type": "boolean",
+        "label": "Nonresponder Check — Report repeat nonresponders",
+        "helpText": "Reports the new post to moderators after warning when every qualifying previous post also received an app warning.",
+        "defaultValue": true
+      },
+      "nonresponderResponse": {
+        "type": "paragraph",
+        "label": "Nonresponder Check — Warning comment",
+        "helpText": "Commented (distinguished, stickied, locked) on the new post when the author is a nonresponder. Leave blank to post nothing.",
+        "defaultValue": "Responding to commenters is a subreddit rule. You did not respond on your recent qualifying posts. Please engage with the comments on this post by replying to commenters."
       }
     }
   },
