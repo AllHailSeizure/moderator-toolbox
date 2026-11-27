@@ -37,9 +37,9 @@ You need **moderator permissions** to install a Devvit app on a community.
 1. Open your subreddit’s **Mod Tools**.
 2. Go to **Installed Apps** (or the Devvit apps section Reddit shows for your community).
 3. Find **Moderator Toolbox** (`moderator-toolbox` in the Devvit catalog) and install or upgrade it.
-4. Open the app’s **Settings** page for your subreddit to turn modules on or off and set limits and messages.
+4. Open the app’s **Settings** page for your subreddit to turn modules on and off and set limits and messages.
 
-App-wide secrets (optional log mirroring to Supabase) are set by the app operator, not in the subreddit settings list: `supabaseUrl` and `supabaseServiceKey` in global install settings.
+Some operator-only global settings (for example optional off-site log mirroring) are configured outside the subreddit settings page by the app operator.
 
 ---
 

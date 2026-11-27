@@ -23,6 +23,6 @@ Thanks for helping improve Moderator Toolbox.
 - **Prettier** — `npm run format` for formatting. Config: `.prettierrc`.
 - Match existing module patterns in `src/server/` (see `src/server/CLAUDE.md` for module conventions used in this repo).
 
-Do not commit secrets or Reddit/Devvit tokens.
+Do not commit sensitive install configuration or personal Reddit login material.
 
 Maintainers merge when CI on the PR is green and the change is reviewed.

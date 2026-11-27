@@ -9,31 +9,27 @@ The live subreddit still runs **moderator-toolbox 0.0.4** (published from Reddit
 
 ## Before you start
 
-- Have these values ready. They are the same values the 0.0.4 install uses today:
-  - `supabaseUrl`, `supabaseServiceKey`
-  - `supabaseFunctionToken`: reuse the current token. The `resolve-doi` function accepts any token whose SHA-256 is in `public.function_tokens`, whatever its row name. Optionally, add a separate row named `predatory-journal-watch` (see the comment in PJW's `016_function_tokens.sql`).
-  - `geminiApiKey`
-- Supabase needs no change. Both apps use the same project, tables (`predatory_watchlist`, `doi_resolution`, `function_tokens`, `bot_logs`) and edge functions as today.
+- Copy global install configuration from the current **moderator-toolbox 0.0.4** install into each new app. Use each app's README for which fields to set and how to set them.
+- Supabase needs no schema change. Both new apps use the same project, existing PJW tables (`predatory_watchlist`, `doi_resolution`, `bot_logs`, and related lookup tables) and edge functions as today.
   - Redeploying `resolve-doi` and `sync-predatory-watchlist` from the PJW repo is optional. The code only changes the sync function's User-Agent to `predatory-journal-watch` and moves an import path.
-- In each new repo, add the `DEVVIT_AUTH_TOKEN` Actions secret if you want the release workflow to publish; or publish from your machine.
+- Publish each new app from its repository using that repo's maintainer process, or from your machine.
 
 ## Order
 
 1. **Publish predatory-journal-watch 1.0.0** from its repo.
 2. **Install it** on the subreddit. It stays silent until Supabase is configured: it skips content and does not mark it handled.
-3. **Publish define-bot 1.0.0** and **install it**. It stays silent until `geminiApiKey` is set.
+3. **Publish define-bot 1.0.0** and **install it**. It stays silent until its global install configuration is complete (see the define-bot README).
 4. **In moderator-toolbox 0.0.4's subreddit settings, turn off:**
    - `predatoryWatchEnabled` ("Predatory Journal Watch — Enable")
    - `defineCommandEnabled` ("Define Command — Enable")
 
    This prevents duplicate replies while both apps run.
-5. **Enter settings and secrets for the new apps:**
+5. **Configure the new apps:**
    - **predatory-journal-watch:**
-     - Global, set with `devvit settings set` in the PJW repo: `supabaseUrl`, `supabaseServiceKey`, `supabaseFunctionToken`.
+     - Global: set fields with `devvit settings set` in the PJW repo per that project's README.
      - Subreddit: copy `botSignature` and any non-default `predatoryWatchWarning`, `predatoryWatchAllowlist`, `predatoryWatchCheckComments` and `predatoryWatchMatchPublisherName` values from the toolbox install page.
    - **define-bot:**
-     - Global: `geminiApiKey`.
-     - Subreddit: `botSignature` and any non-default `defineCommandCategory` or `defineCommandSearchGrounding`.
+     - Global and subreddit settings per the define-bot README (copy non-default `botSignature`, `defineCommandCategory`, and `defineCommandSearchGrounding` from the toolbox install page where applicable).
    - Smoke test:
      - Comment `u/define-bot !define [entropy]`. Users must now mention **u/define-bot**, not u/moderator-toolbox.
      - Post a link to a domain on the watchlist.

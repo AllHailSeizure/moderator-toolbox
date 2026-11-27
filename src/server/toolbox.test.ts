@@ -214,7 +214,7 @@ describe('extracted modules are gone', () => {
 });
 
 describe('devvit.json', () => {
-  test('drops the extracted settings, secrets and domains', () => {
+  test('drops the extracted global settings and domains', () => {
     const keys = [
       ...Object.keys(devvit.settings.global),
       ...Object.keys(devvit.settings.subreddit),
