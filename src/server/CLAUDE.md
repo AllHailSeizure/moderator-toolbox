@@ -102,4 +102,4 @@ First arg is always a snake_case event name. Second arg is the data object. Neve
 
 ## Before promoting to publish
 
-Add or update a FakeRedditWorld test (`src/server/*.test.ts`) and run `npm run check`. Publishing is done by Nate through the release workflow.
+Add or update a FakeRedditWorld test (`src/server/*.test.ts`) and run `npm run check`. Only Nate approves releases. Once Nate has approved a release, Devviteloper pushes the vX.Y.Z tag.
