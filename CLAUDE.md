@@ -97,7 +97,7 @@ import { register as registerMyModule } from './action-modules/my-module';
 
 ## Settings System
 
-**Settings** are declared in `devvit.json` under `settings.subreddit` (mod-editable from the app's install settings page) or `settings.global` (secrets: `supabaseServiceKey`; plus `supabaseUrl`). Read via `import { settings } from '@devvit/web/server'` → `(await settings.get<T>('key')) ?? defaultValue`. The old Redis-backed `settings:*` store and its unreachable admin menu were removed; nothing reads those keys.
+**Settings** are declared in `devvit.json` under `settings.subreddit` (mod-editable from the app's install settings page) or `settings.global` (operator-only values such as optional off-site log mirroring). Read via `import { settings } from '@devvit/web/server'` → `(await settings.get<T>('key')) ?? defaultValue`. The old Redis-backed `settings:*` store and its unreachable admin menu were removed; nothing reads those keys.
 
 `helpers/signature.ts` `formatSignature(raw)` superscripts each word of `botSignature` and prepends `---`; returns `''` on empty input.
 
@@ -114,7 +114,7 @@ log.warn('msg');
 log.error('msg', err, { data });   // err is serialized to { message, stack }
 ```
 
-`helpers/logger.ts`. All levels write to console (visible via `devvit logs`). Each level is also persisted to a Redis sorted set (`bot:log:info`, `bot:log:warn`, `bot:log:error`), capped at 500 entries (oldest evicted), and, when `supabaseUrl` and `supabaseServiceKey` are set, inserted into the Supabase `bot_logs` table. `logZSet(key, entry, max)` appends to a capped per-module log.
+`helpers/logger.ts`. All levels write to console (visible via `devvit logs`). Each level is also persisted to a Redis sorted set (`bot:log:info`, `bot:log:warn`, `bot:log:error`), capped at 500 entries (oldest evicted), and, when optional Supabase log mirroring is configured, inserted into the Supabase `bot_logs` table. `logZSet(key, entry, max)` appends to a capped per-module log.
 
 ---
 

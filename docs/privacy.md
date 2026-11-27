@@ -34,7 +34,7 @@ The app does not use any AI service, does not build profiles, and does not sell 
 ## 3. Third parties
 
 - **Reddit** runs the app and stores its Redis data and comments.
-- **Supabase** (optional). If the operator sets `supabaseUrl` and `supabaseServiceKey`, each log line the app writes is also inserted into a `bot_logs` table in the operator's Supabase project. A log line has a level, module name, message, and may include action, reason, user ID, post ID, comment ID and other event details (for example usernames). Supabase processes this under the [Supabase Privacy Policy](https://supabase.com/privacy). If those settings are blank, nothing is sent to Supabase.
+- **Supabase** (optional). If the operator enables optional log mirroring to Supabase, each log line the app writes is also inserted into a `bot_logs` table in the operator's Supabase project. A log line has a level, module name, message, and may include action, reason, user ID, post ID, comment ID and other event details (for example usernames). Supabase processes this under the [Supabase Privacy Policy](https://supabase.com/privacy). If mirroring is not configured, nothing is sent to Supabase.
 
 The app calls no other outside service.
 

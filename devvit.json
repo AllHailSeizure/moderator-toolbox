@@ -104,8 +104,8 @@
       },
       "supabaseServiceKey": {
         "type": "string",
-        "label": "Supabase service key",
-        "helpText": "Service key for writing bot logs to the bot_logs table. Keep secret.",
+        "label": "Supabase log mirroring",
+        "helpText": "Enables writing bot logs to the bot_logs table when log mirroring is turned on.",
         "isSecret": true
       }
     },
